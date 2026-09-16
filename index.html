@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Painel de Prospecção</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Painel de Prospecção</h1>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="leads">Leads</button>
+    <button class="tab-btn" data-tab="clientes">Clientes</button>
+    <button class="tab-btn" data-tab="servicos">Serviços</button>
+  </nav>
+
+  <main>
+    <section id="tab-leads" class="tab-content active">
+      <div class="section-header">
+        <h2>Leads</h2>
+        <button id="refresh-leads" class="btn-secondary">Atualizar</button>
+      </div>
+      <p class="hint">Linhas destacadas = sem site ou nota abaixo de 4.0 (leads quentes).</p>
+      <div id="leads-status" class="status"></div>
+      <div class="table-wrap">
+        <table id="leads-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Endereço</th>
+              <th>Telefone</th>
+              <th>Site</th>
+              <th>Nota</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-clientes" class="tab-content">
+      <div class="section-header">
+        <h2>Clientes</h2>
+        <button id="refresh-clientes" class="btn-secondary">Atualizar</button>
+      </div>
+      <p class="hint">Mude o status pelo seletor — salva automaticamente na planilha.</p>
+      <div id="clientes-status" class="status"></div>
+      <div class="table-wrap">
+        <table id="clientes-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Telefone</th>
+              <th>Status</th>
+              <th>Atualizado em</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-servicos" class="tab-content">
+      <div class="section-header">
+        <h2>Serviços</h2>
+        <button id="refresh-servicos" class="btn-secondary">Atualizar</button>
+      </div>
+      <p class="hint">Para editar, abra a aba "Servicos" direto na sua Planilha Google.</p>
+      <div id="servicos-status" class="status"></div>
+      <div class="table-wrap">
+        <table id="servicos-table">
+          <thead>
+            <tr>
+              <th>Serviço</th>
+              <th>Descrição</th>
+              <th>Preço</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
