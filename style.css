@@ -157,6 +157,11 @@ select.status-select {
   border-radius: 5px;
   font-size: 0.8rem;
   cursor: pointer;
+  margin-right: 6px;
+}
+
+.btn-mini-danger {
+  background: #b3441e;
 }
 
 @media (max-width: 480px) {

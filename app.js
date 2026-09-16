@@ -5,6 +5,8 @@
 // ============================================================
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxBjAUa44rVucJeV1_Iutc4zK8zPZhYVSM60XjtwJHrB-J_ibISaNX_ddAIhjCROsH2nA/exec";
 
+const STATUS_OPCOES = ["Preciso entrar em contato", "Negociando", "Fechado", "Perdido"];
+
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
@@ -45,54 +47,81 @@ function setStatus(elId, msg) {
   document.getElementById(elId).textContent = msg;
 }
 
-function isLeadQuente(lead) {
-  const semSite = !lead.Site || String(lead.Site).trim() === "";
-  const nota = parseFloat(String(lead.Nota).replace(",", "."));
-  const notaBaixa = !isNaN(nota) && nota < 4.0;
-  return semSite || notaBaixa;
+function temSite(lead) {
+  return Boolean(lead.Site && String(lead.Site).trim() !== "");
 }
 
-function formatDate(value) {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString("pt-BR");
+function leadEstaQuebrado(lead) {
+  // "nao deu certo" na coleta: faltou nome ou telefone
+  const semNome = !lead.Nome || String(lead.Nome).trim() === "";
+  const semTelefone = !lead.Telefone || String(lead.Telefone).trim() === "";
+  return semNome || semTelefone;
+}
+
+function notaBaixa(lead) {
+  const nota = parseFloat(String(lead.Nota).replace(",", "."));
+  return !isNaN(nota) && nota < 4.0;
+}
+
+function isSameDay(dateValue) {
+  if (!dateValue) return false;
+  const d = new Date(dateValue);
+  if (isNaN(d.getTime())) return false;
+  const hoje = new Date();
+  return (
+    d.getFullYear() === hoje.getFullYear() &&
+    d.getMonth() === hoje.getMonth() &&
+    d.getDate() === hoje.getDate()
+  );
 }
 
 async function loadLeads() {
   setStatus("leads-status", "Carregando...");
   try {
-    const leads = await fetchSheet("leads");
+    const todos = await fetchSheet("leads");
+
+    // Esconde automaticamente: quem ja tem site, e quem veio quebrado
+    // da coleta (faltou nome ou telefone). Continuam guardados na
+    // planilha, so nao aparecem aqui pra nao poluir sua tela.
+    const leads = todos.filter((lead) => !temSite(lead) && !leadEstaQuebrado(lead));
+
     const tbody = document.querySelector("#leads-table tbody");
     tbody.innerHTML = "";
 
     leads.forEach((lead) => {
       const tr = document.createElement("tr");
-      if (isLeadQuente(lead)) tr.classList.add("lead-quente");
-
-      const siteCell = lead.Site
-        ? `<a href="${escapeHtml(lead.Site)}" target="_blank" rel="noopener">site</a>`
-        : "-";
+      if (notaBaixa(lead)) tr.classList.add("lead-quente");
 
       tr.innerHTML = `
         <td>${escapeHtml(lead.Nome)}</td>
         <td>${escapeHtml(lead.Endereco)}</td>
         <td>${escapeHtml(lead.Telefone)}</td>
-        <td>${siteCell}</td>
+        <td>${escapeHtml(lead.Nicho) || "-"}</td>
         <td>${escapeHtml(lead.Nota) || "-"}</td>
-        <td></td>
+        <td class="acoes"></td>
       `;
 
-      const btn = document.createElement("button");
-      btn.className = "btn-mini";
-      btn.textContent = "Virar cliente";
-      btn.addEventListener("click", () => promoteToCliente(lead));
-      tr.lastElementChild.appendChild(btn);
+      const btnCliente = document.createElement("button");
+      btnCliente.className = "btn-mini";
+      btnCliente.textContent = "Virar cliente";
+      btnCliente.addEventListener("click", () => promoteToCliente(lead));
+
+      const btnDescartar = document.createElement("button");
+      btnDescartar.className = "btn-mini btn-mini-danger";
+      btnDescartar.textContent = "Descartar";
+      btnDescartar.addEventListener("click", () => discardLead(lead));
+
+      const acoesCell = tr.querySelector(".acoes");
+      acoesCell.appendChild(btnCliente);
+      acoesCell.appendChild(btnDescartar);
 
       tbody.appendChild(tr);
     });
 
-    setStatus("leads-status", `${leads.length} leads carregados.`);
+    setStatus(
+      "leads-status",
+      `${leads.length} leads pra trabalhar (de ${todos.length} coletados — os com site ou incompletos ficam escondidos).`
+    );
   } catch (err) {
     setStatus("leads-status", "Erro ao carregar: " + err.message);
   }
@@ -102,7 +131,13 @@ async function promoteToCliente(lead) {
   try {
     await postAction({
       action: "addCliente",
-      cliente: { Nome: lead.Nome, Telefone: lead.Telefone, Status: "Negociando" },
+      cliente: {
+        Nome: lead.Nome,
+        Endereco: lead.Endereco,
+        Telefone: lead.Telefone,
+        Nicho: lead.Nicho,
+        Status: "Preciso entrar em contato",
+      },
     });
     alert(`${lead.Nome} adicionado à aba Clientes.`);
     loadClientes();
@@ -111,10 +146,25 @@ async function promoteToCliente(lead) {
   }
 }
 
+async function discardLead(lead) {
+  if (!confirm(`Descartar "${lead.Nome}"? Ele some da sua lista de leads.`)) return;
+  try {
+    await postAction({ action: "discardLead", nome: lead.Nome, endereco: lead.Endereco });
+    loadLeads();
+  } catch (err) {
+    alert("Erro ao descartar: " + err.message);
+  }
+}
+
 async function loadClientes() {
   setStatus("clientes-status", "Carregando...");
   try {
-    const clientes = await fetchSheet("clientes");
+    const todos = await fetchSheet("clientes");
+
+    // "Perdido" some sozinho da tela a partir do dia seguinte a quando
+    // foi marcado (no mesmo dia ainda aparece, como confirmacao visual).
+    const clientes = todos.filter((c) => !(c.Status === "Perdido" && !isSameDay(c.DataAtualizacao)));
+
     const tbody = document.querySelector("#clientes-table tbody");
     tbody.innerHTML = "";
 
@@ -122,14 +172,15 @@ async function loadClientes() {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${escapeHtml(cliente.Nome)}</td>
+        <td>${escapeHtml(cliente.Endereco)}</td>
         <td>${escapeHtml(cliente.Telefone)}</td>
-        <td></td>
-        <td>${formatDate(cliente.DataAtualizacao)}</td>
+        <td>${escapeHtml(cliente.Nicho) || "-"}</td>
+        <td class="status-cell"></td>
       `;
 
       const select = document.createElement("select");
       select.className = "status-select";
-      ["Negociando", "Fechado", "Perdido"].forEach((opt) => {
+      STATUS_OPCOES.forEach((opt) => {
         const option = document.createElement("option");
         option.value = opt;
         option.textContent = opt;
@@ -137,12 +188,12 @@ async function loadClientes() {
         select.appendChild(option);
       });
       select.addEventListener("change", () => updateStatus(cliente, select.value));
-      tr.children[2].appendChild(select);
+      tr.querySelector(".status-cell").appendChild(select);
 
       tbody.appendChild(tr);
     });
 
-    setStatus("clientes-status", `${clientes.length} clientes carregados.`);
+    setStatus("clientes-status", `${clientes.length} clientes na tela.`);
   } catch (err) {
     setStatus("clientes-status", "Erro ao carregar: " + err.message);
   }
